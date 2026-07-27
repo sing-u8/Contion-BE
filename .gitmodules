@@ -1,4 +1,4 @@
 [submodule "upstream"]
 	path = upstream
-	url = /Users/singyupark/Documents/worship-conti-maker-node-version
+	url = https://github.com/sing-u8/Conti-On.git
 	branch = main
