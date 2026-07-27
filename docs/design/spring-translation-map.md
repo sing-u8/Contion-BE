@@ -267,7 +267,7 @@ Root로 재분류**했다(전략설계 v1.1.1). 총계도 `9 AR` → `7 Aggregat
 조용히 다르게 구현하지 않는다 — 수정 또는 의도적 차이를 기록한다")가 정확히 걸리는
 지점이다.**
 
-> **`3.전술설계_DDD_Phase2.md` v1.1.9 §9.5.4**: "`uq_sheet_music_files_sm_order
+> **`3.전술설계_DDD_Phase2.md` v1.1.9 §9.5.5**: "`uq_sheet_music_files_sm_order
 > (sheet_music_id, display_order)`는 **INV-SM-03(순서 유일성)** 을 위한 인덱스다.
 > 개수 상한과는 무관하게 만들어졌다. 그런데 `display_order`를 `max + 1`로 채번하기
 > 때문에 동시 삽입이 **반드시 같은 값을 요구**하게 되고, 그 충돌이 유니크 인덱스에
@@ -288,10 +288,21 @@ BR-TM-010(팀 정원 100)이 쓰는 `SELECT … FOR UPDATE` + 트랜잭션 내 �
 3. **동시성 제어는 이 프로젝트의 명시적 학습 목표다**(charter §2.1). 같은 코드베이스
    안에 "설계된 보호"와 "우연한 보호"가 공존하는 것을 재현할 이유가 없다.
 
+**원본이 이 결정을 명시적으로 승인한다.** 후속 커밋(`1c0671ae`)이 Nest 어댑터의 채번
+지점에 주석을 박았다.
+
+> `apps/api/src/bc2sheetmusic/.../prisma-sheet-music-file-command.adapter.ts`:
+> "`max + 1` numbering is **load-bearing, not cosmetic** … **if you change the
+> numbering, lock the sheet_music row instead.**"
+
+Spring/JPA 재구현은 채번이 달라질 가능성이 높은 쪽이므로, 이 주석의 지시대로 **행을
+잠그는 방식**으로 간다. 원본은 채번을 유지하기로 했고 이 저장소는 채번이 바뀌므로,
+같은 지침을 따르면서 서로 다른 구현에 이르는 것이다 — 근거 없는 이탈이 아니다.
+
 **의도적 차이로 기록한다.** 외부 계약(11개가 되지 않는다·`TOO_MANY_FILES`)은 동일하고,
 바뀌는 것은 그 보장을 만드는 방식뿐이다. 동시 업로드 테스트를 반드시 함께 작성한다.
 
-**부수 관찰 (원본 §9.5.4)**: 경합 시 P2002가 `PERSISTENCE_FAILED`로 보고된다(원인이
+**부수 관찰 (원본 §9.5.5)**: 경합 시 P2002가 `PERSISTENCE_FAILED`로 보고된다(원인이
 "동시 업로드 충돌"인데 "저장 실패"로 표시). 명시적 잠금으로 가면 이 표면도 자연히
 정확해지지만, **에러 코드는 외부 계약이므로 바꾸기 전에 기준선 diff를 확인한다.**
 

@@ -88,18 +88,34 @@ ok "초기화됨"
 
 echo "[2/4] 핀 일치 (gitlink vs 실제 체크아웃)"
 ACTUAL_SHA="$(git -C "$SUBMODULE" rev-parse HEAD)"
-RECORDED_SHA="$(git ls-tree HEAD -- "$SUBMODULE" | awk '{print $3}')"
 
-if [ -z "$RECORDED_SHA" ]; then
-  echo "  · 부모 커밋에 gitlink 없음 (최초 도입 중) — 실제 SHA를 기준으로 진행"
-  RECORDED_SHA="$ACTUAL_SHA"
+# 비교 대상은 HEAD 가 아니라 **인덱스**다. 인덱스가 다음 커밋에 기록될 값이기 때문이다.
+#
+# HEAD 와 비교하면 핀 이동 창(`git add upstream` 후 커밋 전)에서 항상 실패한다 —
+# pre-commit 훅이 이 스크립트를 부르므로, 게이트가 UPSTREAM.md §5 가 지시하는 핀 이동
+# 커밋 자체를 막게 된다. 게이트가 자기 절차를 차단하면 그 게이트는 우회당한다.
+#
+# 인덱스와 비교해도 탐지력은 그대로다: 서브모듈이 의도 없이 움직였다면 인덱스는 옛
+# SHA 를 그대로 갖고 있으므로 불일치로 잡힌다. 스테이지했다는 것 자체가 "의도했다"는
+# 신호이고, 그 의도는 커밋 diff 로 남아 리뷰 대상이 된다.
+INDEX_SHA="$(git ls-files -s "$SUBMODULE" 2>/dev/null | awk '{print $2}')"
+HEAD_SHA="$(git ls-tree HEAD -- "$SUBMODULE" 2>/dev/null | awk '{print $3}')"
+
+if [ -z "$INDEX_SHA" ]; then
+  echo "  · 인덱스에 gitlink 없음 (최초 도입 중) — 실제 SHA를 기준으로 진행"
+  INDEX_SHA="$ACTUAL_SHA"
 fi
 
-if [ "$ACTUAL_SHA" != "$RECORDED_SHA" ]; then
-  fail "핀 이탈: 기록=$RECORDED_SHA / 실제=$ACTUAL_SHA"
+if [ "$ACTUAL_SHA" != "$INDEX_SHA" ]; then
+  fail "핀 이탈: 인덱스=$INDEX_SHA / 실제=$ACTUAL_SHA"
   echo "    의도한 이동이라면 'git add $SUBMODULE' 로 기록하고 UPSTREAM.md §5를 따르세요." >&2
+  echo "    되돌리려면: git -C $SUBMODULE checkout --detach $INDEX_SHA" >&2
 else
   ok "$ACTUAL_SHA"
+  # 핀 이동이 진행 중이면 알려준다 — 조용히 통과시키지 않는다.
+  if [ -n "$HEAD_SHA" ] && [ "$HEAD_SHA" != "$INDEX_SHA" ]; then
+    echo "  · 핀 이동이 스테이지됨: ${HEAD_SHA:0:12}… → ${INDEX_SHA:0:12}… (커밋되면 확정)"
+  fi
 fi
 
 # ---------- (3) 읽기 전용 규약 -------------------------------------------------
