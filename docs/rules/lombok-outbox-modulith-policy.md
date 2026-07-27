@@ -40,41 +40,86 @@
 - JPA 엔티티의 식별성에 맞춘 `equals()`와 `hashCode()` 정책
 - 연관관계 변경과 양방향 연관관계 동기화 로직
 
+**전제: 도메인 모델과 JPA 엔티티는 분리한다.** 불변식과 상태 전이는 **도메인**이
+소유하고, JPA 엔티티는 영속성 표현만 담당한다. 이 결정과 근거는
+[`../design/spring-translation-map.md`](../design/spring-translation-map.md) §6
+"도메인 순수도" 행에 있고, `ArchitectureRulesTest` 가 기계적으로 강제한다.
+
+도메인 — 불변식과 행위가 여기 산다. 프레임워크 타입을 import 하지 않는다.
+
 ```java
+// team/domain/Team.java  — Lombok 도, JPA 도 없다.
+public class Team {
+
+    private final TeamId id;          // UUID 기반 도메인 식별자. Long PK 는 모른다.
+    private TeamName name;
+
+    private Team(TeamId id, TeamName name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    /** 새 팀 생성 — 불변식은 VO 와 이 팩토리가 소유한다. */
+    public static Team create(TeamId id, TeamName name) {
+        return new Team(id, Objects.requireNonNull(name, "팀 이름은 필수입니다."));
+    }
+
+    /** 영속 상태에서 재구성 — adapter 의 매퍼만 호출한다. 불변식 재검증 없음. */
+    public static Team reconstitute(TeamId id, TeamName name) {
+        return new Team(id, name);
+    }
+
+    public void rename(TeamName name) {
+        this.name = Objects.requireNonNull(name, "팀 이름은 필수입니다.");
+    }
+
+    public TeamId id() { return id; }
+
+    public TeamName name() { return name; }
+}
+```
+
+JPA 엔티티 — 영속성 표현. Lombok 은 **여기서** 보일러플레이트를 줄인다.
+
+```java
+// team/adapter/out/persistence/TeamJpaEntity.java
 @Entity
+@Table(name = "teams")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class TeamJpaEntity {
+class TeamJpaEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long id;                  // 내부 PK. 도메인에 노출하지 않는다.
 
     @Column(nullable = false, unique = true, updatable = false)
-    private UUID publicId;
+    private UUID publicId;            // 외부 공개 식별자
 
     @Column(nullable = false)
     private String name;
 
-    public static TeamJpaEntity create(UUID publicId, String name) {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("팀 이름은 필수입니다.");
-        }
-
-        TeamJpaEntity team = new TeamJpaEntity();
-        team.publicId = publicId;
-        team.name = name;
-        return team;
+    static TeamJpaEntity from(Team team) {
+        TeamJpaEntity e = new TeamJpaEntity();
+        e.publicId = team.id().value();
+        e.name = team.name().value();
+        return e;
     }
 
-    public void rename(String name) {
-        if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("팀 이름은 필수입니다.");
-        }
-        this.name = name;
+    void apply(Team team) {           // 기존 row 갱신
+        this.name = team.name().value();
+    }
+
+    Team toDomain() {
+        return Team.reconstitute(new TeamId(publicId), new TeamName(name));
     }
 }
 ```
+
+> **`create` 와 `reconstitute` 를 구분하는 이유**: `create` 는 새 애그리거트를 만드는
+> 순간이라 불변식을 검증해야 하고, `reconstitute` 는 이미 DB 에 있는 사실을 복원하는
+> 것이라 검증하면 안 된다 — 과거에 유효했던 데이터를 규칙이 바뀐 뒤 로딩만 해도
+> 예외가 나면 조회조차 불가능해진다.
 
 ### 2.3 금지 또는 제한
 
