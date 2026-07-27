@@ -1,0 +1,12 @@
+# UPSTREAM.lock — 기계 생성. 손으로 편집하지 마세요.
+# 재생성: ./scripts/check-upstream.sh --update
+# 배경:   docs/upstream/UPSTREAM.md
+pin	90f29eb9bbed4d2b3ebc0f9015ff35f52b6a5858
+file	v8.115	dd16a8b04b87a0fcedfa23765e465b2a4eb0d546d0aa13acb76353ac5ffee366	docs/plan/1.찬양_콘티_메이커_요구사항명세서.md
+file	v1.1.3	bef6fceb12acb2ae942c1096588f2bb340c4d21c3e0b5a23df2956f768db8c5c	docs/plan/2.전략설계_DDD_Phase1.md
+file	v1.1.9	039fd4f08678e9c79f3acda85e73a0dfba146fcd5994762605af5d6e58427549	docs/plan/3.전술설계_DDD_Phase2.md
+file	v1.1.5	a709416b8bfb9cd0f003786bdf08407442d6639ee141d1831ab6be349100c88b	docs/plan/4.DB설계_Phase3.md
+file	v0.2.2	6f6833237a93638f3c5d2330678b1f77c52a55f8e4366cce77a0d2a3510d0b0c	docs/plan/CONTEXT.md
+file	v1.28	61d4b53a3ebb36d152e9645c76a84bce68341a70a8647fb7612ac35a00d6d455	docs/plan/BR_confusion_catalog.md
+file	v8.115	b8f461c8288f4e6305290e12f379a2305593c11e615994bc4e5a4643ec52b108	docs/plan/planning-sync-audit.md
+file	-	fdb262f2dba273b8840aad887affffc5d5ae583824fee8829b174b4424b0a7f8	tools/openapi/openapi.json
