@@ -1,0 +1,33 @@
+# 로컬 개발 프로파일 — 공통(application.yaml)과의 차이만 둔다.
+#
+# 이 애플리케이션은 원본 NestJS 앱과 같은 DB 를 공유하지 않는다
+# (charter §5.3 — 전용 PostgreSQL). 원본 로컬 인프라(postgres :15432 /
+# redis :16379)와 포트가 겹치지 않도록 별도 인스턴스를 띄운다.
+#
+# 값은 환경변수(.env)로 덮어쓸 수 있고, 아래는 로컬 기본값이다.
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:15433/contion_spring}
+    username: ${DB_USERNAME:contion}
+    password: ${DB_PASSWORD:contion}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:16380}
+
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:11025}
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus

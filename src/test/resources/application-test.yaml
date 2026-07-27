@@ -1,0 +1,26 @@
+# 테스트 프로파일 — 공통(application.yaml)과의 차이만 둔다.
+#
+# datasource / redis 접속 정보는 여기서 지정하지 않는다. Testcontainers 의
+# @ServiceConnection 이 런타임에 주입한다 (TestcontainersConfiguration 참조).
+# 아래 자리표시는 공통 설정의 env placeholder 를 만족시키기 위한 것이며,
+# 실제 값은 @ServiceConnection 이 덮어쓴다.
+#
+# Flyway 는 테스트에서도 켜 둔다. charter §8 은 "실제 Flyway migration 기반
+# repository 테스트"를 요구한다 — 테스트만 ddl-auto 로 스키마를 만들면
+# 마이그레이션 결함을 잡지 못한다.
+
+spring:
+  datasource:
+    url: ${DB_URL:}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+logging:
+  level:
+    org.testcontainers: info
+    com.github.dockerjava: warn
