@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# Contion-Spring-BE — pre-commit 훅
+# ==============================================================================
+#
+# 방법론 번들 템플릿(docs/methodology/hooks/pre-commit)을 이 프로젝트에 맞게
+# 배선한 것이다. 어떤 AI 에이전트·스킬 팩이 켜져 있든(혹은 사람이 직접 커밋하든)
+# 커밋 시점에 기계적으로 강제된다 — 프롬프트를 읽지 않는 도구에 대한 마지막 방어선.
+#
+# 설치: ./scripts/setup-dev.sh   (git config core.hooksPath .githooks)
+#
+# 강제하는 것:
+#   (A) 보호 브랜치(main/master) 직접 커밋 금지.               [항상 ON]
+#   (B) upstream 기획 SSoT 핀 검증.                            [기본 block]
+#   (C) upstream/ 서브모듈 내용 편집 금지 (읽기 전용 규약).      [항상 block]
+#   (D) 스테이지된 변경분에 게이트/검증 마커 확인.               [기본 warn]
+#
+# 환경변수 (전부 선택):
+#   SPEC_GATED_ALLOW_PROTECTED_COMMIT=1   이번 커밋만 (A) 건너뜀
+#   SPEC_GATED_PROTECTED_BRANCHES         기본 "main master"
+#   SPEC_GATED_TEST_BRANCH                브랜치 자동감지 대신 이 값 사용(테스트용)
+#   SPRING_SKIP_UPSTREAM_CHECK=1          이번 커밋만 (B) 건너뜀
+#   SPEC_GATED_MARKER_MODE                off | warn | block   기본 warn
+#   SPEC_GATED_MARKER_PATTERN             마커 정규식(grep -E)
+#   SPEC_GATED_SKIP_MARKER_CHECK=1        이번 커밋만 (D) 건너뜀
+#
+# 의존성: bash + git + grep. (B)만 ./scripts/check-upstream.sh 를 호출한다.
+# ==============================================================================
+
+set -eu
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# ---------- (A) 보호 브랜치 직접 커밋 차단 -----------------------------------
+
+if [ "${SPEC_GATED_ALLOW_PROTECTED_COMMIT:-0}" = "1" ] || [ "${CLAUDE_ALLOW_MAIN_COMMIT:-0}" = "1" ]; then
+  :
+else
+  # 공백 단어분리로 순회할 목적이라 의도적으로 따옴표 없이 확장한다(SC2086).
+  PROTECTED_BRANCHES="${SPEC_GATED_PROTECTED_BRANCHES:-main master}"
+
+  branch="${SPEC_GATED_TEST_BRANCH:-}"
+  if [ -z "$branch" ]; then
+    branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  fi
+
+  for b in $PROTECTED_BRANCHES; do
+    if [ "$branch" = "$b" ]; then
+      echo "" >&2
+      echo "[pre-commit] 보호 브랜치('$branch')에는 직접 커밋할 수 없습니다." >&2
+      echo "" >&2
+      echo "  작업 브랜치를 먼저 만드세요:" >&2
+      echo "    git checkout -b feat/<scope>-<short-description>" >&2
+      echo "" >&2
+      echo "  의도적 예외:  SPEC_GATED_ALLOW_PROTECTED_COMMIT=1 git commit ..." >&2
+      echo "" >&2
+      exit 1
+    fi
+  done
+fi
+
+# ---------- (C) upstream 서브모듈 읽기 전용 -----------------------------------
+# 게이트 순서상 (B)보다 먼저 본다 — 편집된 상태로 핀 검증을 돌리면 원인이 아니라
+# 증상을 보고하게 된다.
+
+# git 은 훅 실행 시 GIT_DIR·GIT_INDEX_FILE 등을 주입한다. GIT_INDEX_FILE 은 보통
+# 상대경로(`.git/index`)라 `git -C upstream ...` 가 디렉터리를 옮기는 순간
+# `upstream/.git/index` 로 해석되는데, `upstream/.git` 은 gitfile(디렉터리 아님)이라
+# "index file open failed: Not a directory" 로 실패한다. 서브모듈을 건드리는 호출은
+# 반드시 이 변수들을 비운 환경에서 실행한다.
+git_clean_env() {
+  env -u GIT_INDEX_FILE -u GIT_DIR -u GIT_WORK_TREE -u GIT_PREFIX \
+      -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES "$@"
+}
+
+if [ -e "$REPO_ROOT/upstream/.git" ]; then
+  upstream_dirty="$(git_clean_env git -C "$REPO_ROOT/upstream" status --porcelain 2>/dev/null | head -20 || true)"
+  if [ -n "$upstream_dirty" ]; then
+    echo "" >&2
+    echo "[pre-commit] upstream/ 서브모듈에 로컬 수정이 있습니다." >&2
+    echo "  원본 기획 문서는 읽기 전용입니다 (CLAUDE.md §2, charter §9)." >&2
+    echo "  기획을 고쳐야 한다면 원본 저장소에서 고치고 여기서는 핀만 올리세요." >&2
+    echo "" >&2
+    printf '%s\n' "$upstream_dirty" | sed 's/^/    /' >&2
+    echo "" >&2
+    exit 1
+  fi
+fi
+
+# ---------- (B) upstream 기획 SSoT 핀 검증 ------------------------------------
+
+if [ "${SPRING_SKIP_UPSTREAM_CHECK:-0}" = "1" ]; then
+  :
+elif [ -x "$REPO_ROOT/scripts/check-upstream.sh" ]; then
+  if ! "$REPO_ROOT/scripts/check-upstream.sh" >/dev/null 2>&1; then
+    echo "" >&2
+    echo "[pre-commit] upstream 기획 SSoT 핀 검증에 실패했습니다." >&2
+    echo "" >&2
+    "$REPO_ROOT/scripts/check-upstream.sh" 2>&1 | sed 's/^/    /' >&2 || true
+    echo "" >&2
+    echo "  절차: docs/upstream/UPSTREAM.md §5" >&2
+    echo "  이번 커밋만 건너뛰기: SPRING_SKIP_UPSTREAM_CHECK=1 git commit ..." >&2
+    echo "" >&2
+    exit 1
+  fi
+fi
+
+# ---------- (D) 게이트 / 검증 마커 확인 ---------------------------------------
+
+MARKER_MODE="${SPEC_GATED_MARKER_MODE:-warn}"
+case "$MARKER_MODE" in
+  off | warn | block) ;;
+  *)
+    echo "[pre-commit] SPEC_GATED_MARKER_MODE='$MARKER_MODE' 를 알 수 없어 'warn'으로 취급합니다." >&2
+    MARKER_MODE="warn"
+    ;;
+esac
+
+if [ "${SPEC_GATED_SKIP_MARKER_CHECK:-0}" = "1" ]; then
+  MARKER_MODE="off"
+fi
+
+# 병합 커밋에는 마커를 요구하지 않는다.
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  MARKER_MODE="off"
+fi
+
+if [ "$MARKER_MODE" != "off" ]; then
+  DEFAULT_PATTERN='참조 문서|Docs consulted|Planning gate|Planning Gate|검증:|Verified:|Verification:|Upstream pin'
+  PATTERN="${SPEC_GATED_MARKER_PATTERN:-$DEFAULT_PATTERN}"
+
+  added_lines="$(git diff --cached 2>/dev/null | grep '^+' | grep -v '^+++' || true)"
+
+  marker_found=0
+  if [ -n "$added_lines" ] && printf '%s\n' "$added_lines" | grep -Eq "$PATTERN"; then
+    marker_found=1
+  fi
+
+  if [ "$marker_found" = "0" ]; then
+    echo "" >&2
+    echo "[pre-commit] 스테이지된 변경분에서 게이트/검증 마커를 찾지 못했습니다." >&2
+    echo "  패턴: $PATTERN" >&2
+    echo "  'Docs consulted / Planning gate' 노트나 검증 결과를 포함하는 것을 권장합니다." >&2
+    echo "  (planning-gate 스킬이 이 블록을 만들어 줍니다.)" >&2
+    echo "  이번 커밋만 건너뛰기: SPEC_GATED_SKIP_MARKER_CHECK=1 git commit ..." >&2
+    echo "  계속 끄기: SPEC_GATED_MARKER_MODE=off" >&2
+    echo "" >&2
+    if [ "$MARKER_MODE" = "block" ]; then
+      exit 1
+    fi
+  fi
+fi
+
+exit 0

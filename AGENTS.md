@@ -1,30 +1,31 @@
 # AGENTS.md
 
-이 저장소는 Worship Conti Maker의 기존 NestJS 백엔드를 Java 21과 Spring Boot 4.1로 재구축한다.
+이 저장소의 에이전트 행동 규칙 정본은 [`CLAUDE.md`](CLAUDE.md)다. 규칙이 한 곳에만
+살도록 이 파일은 본문을 복제하지 않고 **가리키기만** 한다.
 
-코드, 설계, 계획 또는 규칙을 변경하기 전에 다음 문서를 확인한다.
+> **세션 시작 시 [`CLAUDE.md`](CLAUDE.md)를 읽고 그대로 따른다.**
+> 그 파일의 최상위 기준은 다시 [`docs/methodology/CONSTITUTION.md`](docs/methodology/CONSTITUTION.md)다.
 
-1. [`docs/reimplementation-charter.md`](docs/reimplementation-charter.md)
-2. 작업과 관련된 [`docs/rules/`](docs/rules/)
-3. 원본 `worship-conti-maker-node-version` 저장소의 관련 `docs/plan/` 요구사항과 설계 문서
-4. 원본 `BR_confusion_catalog.md`의 관련 혼동 경계
-5. 원본 `tools/openapi/openapi.json`의 API 계약
+## 하드코어 미러 — 4개 비협상 항목 (Tier 0)
 
-## Source of Truth
+포인터를 따라가지 않는 도구를 위해 이것만 인라인으로 둔다.
 
-- 제품 요구사항의 SSoT는 원본 저장소의 `docs/plan/`이다.
-- 이 저장소의 문서는 Spring 재구현 정책과 기술 결정을 기록하며 제품 요구사항을 대체하지 않는다.
-- 코드와 원본 기획 문서가 충돌하면 원본 기획 문서가 우선한다.
-- BR 번호, 이벤트 이름, 식별자 또는 영속성 규칙을 기억에 의존해 인용하지 않는다.
-- 원본 저장소를 읽을 수 없다면 요구사항을 추측하지 않는다.
+1. **게이트 순서** — 기획: 상위 재독 후 하위. 구현: 슬라이스마다 스펙 재독 후 진행.
+2. **SSoT 우선** — 문서 > 코드.
+3. **근거 인용** — 규칙은 원문 인용, 외워서 인용 금지.
+4. **검증-전-완료** — 명령 실행·출력 확인 없이 "완료" 없음.
 
-## Reimplementation Policy
+어떤 스킬 팩·슬래시 커맨드·서브에이전트도 기법 제공자일 뿐 위 4개를 바꿀 수 없다.
 
-- 외부 API 계약과 제품 행위는 보존한다.
-- 내부 구현은 Spring과 JPA의 관용에 맞게 재설계할 수 있다.
-- NestJS 코드는 참조 구현이지 파일 단위 번역 대상이 아니다.
-- 기능은 요구사항 확인, 실패 테스트, 구현, 통합 검증 및 계약 비교가 포함된 작은 수직 슬라이스로 진행한다.
-- Spring에만 해당하는 중요한 기술 결정은 ADR로 남긴다.
-- 같은 이벤트를 커스텀 Outbox와 Spring Modulith가 동시에 처리하도록 구현하지 않는다.
+## 최소 브리핑
 
-원본 저장소의 기본 로컬 상대 경로는 `../worship-conti-maker-node-version`이다.
+- 이 저장소는 Worship Conti Maker의 NestJS 백엔드를 Java 21 + Spring Boot 4.1로
+  재구축한다.
+- **제품 요구사항의 정본은 이 저장소가 아니라** `upstream/` 서브모듈(커밋 SHA로 고정)의
+  `docs/plan/`이다. `upstream/`은 읽기 전용이며 복사하지 않는다.
+- BR 번호·이벤트 이름·식별자를 기억에서 인용하지 않는다. 핀된 원문을 다시 읽는다.
+- 검증 명령을 실행하고 출력을 읽기 전에는 완료를 선언하지 않는다.
+- `main`에 직접 커밋하지 않는다. 커밋·푸시는 요청받았을 때만 한다.
+
+세부 규칙(아키텍처, 계약 동등성, 동시성, Lombok, 검증, 도구 인벤토리)은 전부
+[`CLAUDE.md`](CLAUDE.md)에 있다.

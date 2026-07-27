@@ -1,0 +1,97 @@
+# ==============================================================================
+# Spec-Gated Development — CI 게이트 예시 (이식 가능 템플릿)
+# ==============================================================================
+#
+# 이 파일은 `docs/methodology/hooks/pre-commit`이 로컬 커밋 시점에 강제하는
+# 것과 같은 두 불변식을 서버 쪽(CI)에서 다시 한번 확인하는 최소 예시다.
+# 로컬 훅은 `git commit --no-verify`로 우회할 수 있으므로, 이 CI 잡이 실질적인
+# 마지막 방어선이 된다.
+#
+# 이 방법론 번들을 담고 있는 저장소 자체의 CI에는 배선돼 있지 않다 — 이 파일은
+# 산출물(드롭인 예시)일 뿐이다. 소비 프로젝트가 실제로 켜려면:
+#   1) 이 파일을 CI 설정 위치로 복사한다. GitHub Actions라면 예:
+#        cp docs/methodology/hooks/ci-gate.example.yml \
+#           .github/workflows/spec-gated-ci-gate.yml
+#   2) 아래 `env:`(보호 브랜치 목록 · 마커 모드 · 마커 패턴)를 프로젝트
+#      컨벤션에 맞게 조정한다 — pre-commit 훅과 같은 이름의 환경변수를 그대로
+#      썼다(두 강제 지점이 같은 설정을 공유하도록).
+#   3) 문법은 GitHub Actions로 썼지만 각 step의 실제 로직은 순수 bash이므로,
+#      다른 CI(GitLab CI · CircleCI 등)에도 셸 부분만 그대로 옮기면 재사용된다.
+#
+# 의존성: 체크아웃 액션 하나(소스를 내려받기 위한 CI 플랫폼 표준 부트스트랩)
+# 외에는 bash + git + grep 뿐. 프로젝트 고유 로직 없음.
+# ==============================================================================
+
+name: spec-gated-development-gate-example
+
+"on":
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+env:
+  # pre-commit 훅과 같은 이름 · 같은 의미의 환경변수 — 값만 프로젝트에 맞게 바꾼다.
+  SPEC_GATED_PROTECTED_BRANCHES: "main master"
+  SPEC_GATED_MARKER_MODE: "warn" # off | warn | block
+  SPEC_GATED_MARKER_PATTERN: "참조 문서|Docs consulted|Planning Gate|검증:|Verified:|Verification:"
+
+jobs:
+  spec-gated-invariants:
+    name: "spec-gated 불변식 재확인 (브랜치 규칙 + 참조/검증 마커)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: 저장소 체크아웃 (전체 히스토리 — 브랜치/마커 검사에 필요)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "(A) 보호 브랜치 직접 push 확인"
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -eu
+          branch="${GITHUB_REF#refs/heads/}"
+          is_protected=0
+          for b in $SPEC_GATED_PROTECTED_BRANCHES; do
+            if [ "$branch" = "$b" ]; then
+              is_protected=1
+            fi
+          done
+          if [ "$is_protected" = "1" ]; then
+            parent_count="$(git rev-list --parents -n 1 HEAD | wc -w)"
+            # 첫 토큰은 커밋 자신의 SHA이므로 실제 부모 수는 (토큰 수 - 1)이다.
+            # 부모가 2개 미만(토큰 수 <= 2)이면 병합 커밋이 아니라는 뜻 — 즉
+            # 보호 브랜치에 병합 없이 직접 push된 커밋이라는 뜻이다.
+            if [ "$parent_count" -le 2 ]; then
+              echo "::error::보호 브랜치('$branch')에 병합이 아닌 직접 push가 감지됐습니다. PR/머지 플로우를 사용하세요."
+              exit 1
+            fi
+          fi
+
+      - name: "(B) 참조 문서 / 검증 마커 확인 (설정형)"
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          if [ "$SPEC_GATED_MARKER_MODE" = "off" ]; then
+            echo "마커 검사 비활성화됨(SPEC_GATED_MARKER_MODE=off)."
+            exit 0
+          fi
+          added_lines="$(git diff "$BASE_SHA" "$HEAD_SHA" | grep '^+' | grep -v '^+++' || true)"
+          if [ -n "$added_lines" ] && printf '%s\n' "$added_lines" | grep -Eq "$SPEC_GATED_MARKER_PATTERN"; then
+            echo "참조 문서/검증 마커가 확인됐습니다."
+            exit 0
+          fi
+          echo "이 변경분에서 '참조 문서'/검증 마커를 찾지 못했습니다 (패턴: $SPEC_GATED_MARKER_PATTERN)."
+          if [ "$SPEC_GATED_MARKER_MODE" = "block" ]; then
+            echo "::error::참조 문서/검증 마커 없음 — SPEC_GATED_MARKER_MODE=block이라 실패 처리합니다."
+            exit 1
+          else
+            echo "::warning::참조 문서/검증 마커를 찾지 못했습니다(경고 모드 — 통과 처리)."
+          fi
