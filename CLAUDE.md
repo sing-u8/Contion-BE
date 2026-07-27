@@ -75,7 +75,7 @@ Worship Conti Maker의 기존 NestJS 백엔드를 **Java 21 + Spring Boot 4.1**�
 - 원본 기획 문서를 이 저장소로 **복사하지 않는다** (charter §9 — 두 번째 정본 금지).
   Spring 고유 결정만 `docs/design/`에 **차이(delta)로만** 적는다.
 - 원본 기획에 문제를 발견하면 원본 저장소에서 고치고, 여기서는 핀만 올린다.
-- 핀을 올리는 것은 **명시적 커밋 1개**다. 절차: [`docs/upstream/UPSTREAM.md`](docs/upstream/UPSTREAM.md) §5.
+- 핀을 올리는 것은 **명시적 커밋 1개**다. 절차: [`docs/upstream/UPSTREAM.md`](docs/upstream/UPSTREAM.md) §4.
 - 서브모듈이 없거나 핀이 어긋나면 **요구사항을 추측하지 말고 멈춘다.**
   `./scripts/check-upstream.sh`로 확인한다.
 
@@ -239,8 +239,11 @@ TDD가 기본이다. **실패 테스트 먼저(red) → 구현(green) → 리팩
   `@Version` 금지, Flyway 정본, ProblemDetail 패리티, BR 인용 규율).
 
 **훅 / 스크립트**
-- `.githooks/pre-commit` — 보호 브랜치 차단 + 게이트/검증 마커 확인 + upstream 핀 검증.
+- `.githooks/pre-commit` — 보호 브랜치 차단 + upstream 편집 차단 + 핀 검증 + 게이트 마커.
 - `scripts/check-upstream.sh` — 기획 SSoT 핀 검증 (`--update`로 lock 재생성).
+- `scripts/upstream-sync.sh` — 원본 기획 갱신 반영. 인자 없이 실행하면 확인만 하고,
+  `--pin <SHA>`로 이동한다. **자동으로 최신까지 끌어올리지 않는다** — diff를 읽는 것이
+  이 절차의 목적이기 때문이다 (`docs/upstream/UPSTREAM.md` §4).
 - `scripts/setup-dev.sh` — 새 클론 1회 셋업.
 
 **방법론 원문** — [`docs/methodology/`](docs/methodology/) (헌법 · 가이드 · 합성 모델 ·

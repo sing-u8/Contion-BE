@@ -77,9 +77,10 @@ echo "[1/4] 서브모듈 초기화"
 if [ ! -e "$SUBMODULE/.git" ]; then
   echo "  ✗ '$SUBMODULE/' 이 초기화되지 않았습니다." >&2
   echo "" >&2
-  echo "    git -c protocol.file.allow=always submodule update --init --recursive" >&2
+  echo "    ./scripts/setup-dev.sh" >&2
   echo "" >&2
-  echo "    (또는 ./scripts/setup-dev.sh — 배경: docs/upstream/UPSTREAM.md §4)" >&2
+  echo "    (서브모듈만 필요하면: git submodule update --init --recursive" >&2
+  echo "     — 배경: docs/upstream/UPSTREAM.md §3)" >&2
   exit 1
 fi
 ok "초기화됨"
@@ -92,7 +93,7 @@ ACTUAL_SHA="$(git -C "$SUBMODULE" rev-parse HEAD)"
 # 비교 대상은 HEAD 가 아니라 **인덱스**다. 인덱스가 다음 커밋에 기록될 값이기 때문이다.
 #
 # HEAD 와 비교하면 핀 이동 창(`git add upstream` 후 커밋 전)에서 항상 실패한다 —
-# pre-commit 훅이 이 스크립트를 부르므로, 게이트가 UPSTREAM.md §5 가 지시하는 핀 이동
+# pre-commit 훅이 이 스크립트를 부르므로, 게이트가 UPSTREAM.md §4 가 지시하는 핀 이동
 # 커밋 자체를 막게 된다. 게이트가 자기 절차를 차단하면 그 게이트는 우회당한다.
 #
 # 인덱스와 비교해도 탐지력은 그대로다: 서브모듈이 의도 없이 움직였다면 인덱스는 옛
@@ -108,7 +109,7 @@ fi
 
 if [ "$ACTUAL_SHA" != "$INDEX_SHA" ]; then
   fail "핀 이탈: 인덱스=$INDEX_SHA / 실제=$ACTUAL_SHA"
-  echo "    의도한 이동이라면 'git add $SUBMODULE' 로 기록하고 UPSTREAM.md §5를 따르세요." >&2
+  echo "    의도한 이동이라면 'git add $SUBMODULE' 로 기록하고 UPSTREAM.md §4를 따르세요." >&2
   echo "    되돌리려면: git -C $SUBMODULE checkout --detach $INDEX_SHA" >&2
 else
   ok "$ACTUAL_SHA"
@@ -125,7 +126,7 @@ echo "[3/4] upstream 워킹트리 청결도 (읽기 전용 규약)"
 # set -e 로 아무 메시지 없이 죽는다. 게이트로서 둘 다 최악이다.
 if DIRTY="$(git -C "$SUBMODULE" status --porcelain 2>&1)"; then
   if [ -n "$DIRTY" ]; then
-    fail "upstream/ 에 로컬 수정이 있습니다 — 원본은 읽기 전용입니다 (UPSTREAM.md §6)"
+    fail "upstream/ 에 로컬 수정이 있습니다 — 원본은 읽기 전용입니다 (UPSTREAM.md §5)"
     printf '%s\n' "$DIRTY" | head -20 | sed 's/^/      /' >&2
   else
     ok "깨끗함"
@@ -190,7 +191,7 @@ fi
 
 echo
 if [ "$FAILED" = "1" ]; then
-  echo "UPSTREAM 검증 실패. 절차는 docs/upstream/UPSTREAM.md §5." >&2
+  echo "UPSTREAM 검증 실패. 절차는 docs/upstream/UPSTREAM.md §4." >&2
   exit 1
 fi
 echo "UPSTREAM 검증 통과 @ $ACTUAL_SHA"

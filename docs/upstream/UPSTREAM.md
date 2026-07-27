@@ -46,8 +46,10 @@ charter의 손으로 적은 기준선 표는 DB설계를 `v1.1.1`로 적고 있�
 
 | 일자 | 이동 | 이유 / Spring 영향 |
 | --- | --- | --- |
-| 2026-07-27 | 최초 핀 `8faac025` | 하네스 도입 |
+| 2026-07-27 | 최초 핀 `8faac025` | 하네스 도입. 원본이 아직 미푸시라 `.gitmodules` URL을 로컬 절대경로로 시작 |
 | 2026-07-27 | `8faac025` → `90f29eb9` (11커밋) | 요구사항 v8.114→**v8.115**, 전술 v1.1.0→**v1.1.9**, DB v1.1.3→**v1.1.5**. Java→TypeScript 전환 완료로 **legacy Java 참조 코드가 삭제**됨 + VO 승격 범위·예외 이름 계약·BR-SM-012 동시성 취약점이 새로 문서화. 반영 결과는 [`../design/spring-translation-map.md`](../design/spring-translation-map.md) §2.1·§4.1·§6.2~§6.5 |
+| 2026-07-27 | `90f29eb9` → `1c662cef` (5커밋 중 영향 1) | `1c0671ae`가 BR-SM-012 채번을 "load-bearing"으로 표시하고 해당 절을 §9.5.4→**§9.5.5**로 이동. translation map §6.5 인용 교정 + 원본 코드 주석("채번을 바꾸면 행을 잠글 것")을 Spring 의도적 차이의 근거로 인용 |
+| 2026-07-27 | (핀 이동 아님) `.gitmodules` URL을 **canonical remote로 전환** | 원본 `main`이 GitHub에 푸시되어 로컬 절대경로 의존이 해소됐다. `file://` 전송 우회(`protocol.file.allow`)도 함께 제거 |
 
 이 커밋 시점의 문서 버전은 `docs/upstream/UPSTREAM.lock`에 **기계 생성**으로 기록되며
 `scripts/check-upstream.sh`가 sha256까지 대조한다. 버전 헤더는 사람이 손으로 적는
@@ -56,60 +58,65 @@ charter의 손으로 적은 기준선 표는 DB설계를 `v1.1.1`로 적고 있�
 이 문서에 버전 표를 손으로 복제하지 않는다 — 그것이 애초에 드리프트한 방식이다.
 현재 값은 `./scripts/check-upstream.sh` 출력에서 읽는다.
 
-## 3. 알려진 임시 상태 — 로컬 경로 URL
-
-`.gitmodules`의 URL은 현재 **로컬 절대경로**다. canonical remote가 아니다.
-
-이유: 고정 커밋(`90f29eb9` 및 그 조상들)은 **아직 GitHub에 푸시되지 않았다.**
-GitHub의 `origin/main`은 v8.114 정합 이전이라 핀한 SHA를 fetch할 수 없다.
-
-원본의 해당 브랜치를 푸시한 뒤에는 아래 한 번으로 canonical URL로 전환한다.
+## 3. 최초 셋업 / 다른 머신에서 클론할 때
 
 ```bash
-git config -f .gitmodules submodule.upstream.url https://github.com/sing-u8/Conti-On.git
-git submodule sync upstream
-git add .gitmodules && git commit -m "chore(upstream): switch submodule URL to canonical remote"
+./scripts/setup-dev.sh
 ```
 
-전환 전까지 이 저장소는 **이 머신에서만** 서브모듈을 초기화할 수 있다. Spring
-저장소 자체도 아직 remote가 없으므로 현재 잃는 것은 없다.
-
-## 4. 최초 셋업 / 다른 머신에서 클론할 때
-
-로컬 경로 서브모듈은 git ≥ 2.38의 `file://` 전송 차단(CVE-2022-39253 완화)에
-걸린다. 원본이 본인 소유 로컬 저장소이므로 이 저장소에 한해 허용한다.
+훅 경로를 배선하고, 서브모듈을 초기화하고, 핀을 검증한다. 서브모듈만 필요하면:
 
 ```bash
-git -c protocol.file.allow=always submodule update --init --recursive
+git submodule update --init --recursive
 ```
 
-`scripts/setup-dev.sh`가 이 설정을 로컬 git config에 한 번 심어준다.
-
-## 5. 핀을 올리는 절차 (upstream 동기화 슬라이스)
+## 4. 핀을 올리는 절차 (upstream 동기화 슬라이스)
 
 원본 기획이 갱신됐을 때, 조용히 따라가지 않는다. **명시적인 커밋 1개**로 올린다.
 
+`scripts/upstream-sync.sh`가 기계적인 부분을 대신한다. 사람이 하는 일은 **diff를 읽는
+것**과 **커밋**뿐이다.
+
 ```bash
-# 1) 새 커밋 확인
-git -C upstream fetch origin
-git -C upstream log --oneline <현재핀>..origin/main -- docs/plan/ tools/openapi/
+# 1) 무엇이 바뀌었는지 확인 (읽기 전용)
+./scripts/upstream-sync.sh
+#    → 영향 커밋 목록 + 변경 규모 + 전체 diff 파일 경로를 출력한다.
+#    → 변경이 없거나 Spring 영향 경로(docs/plan · tools/openapi) 밖이면
+#      "할 일 없음"으로 즉시 끝난다.
 
-# 2) 무엇이 바뀌었는지 반드시 읽는다 (BR·이벤트·계약 영향 판단)
-git -C upstream diff <현재핀>..<새SHA> -- docs/plan/ tools/openapi/openapi.json
+# 2) 그 diff 를 읽는다        ← 이 절차의 핵심. 사람이 하는 유일한 판단
+#    무엇을 볼지는 스크립트가 출력하는 체크리스트 참조
 
-# 3) 핀 이동
-git -C upstream checkout --detach <새SHA>
+# 3) 핀 이동 + lock 재생성 + 검증
+./scripts/upstream-sync.sh --pin <새SHA>
 
-# 4) 검증 후 부모에 기록
-./scripts/check-upstream.sh
-git add upstream docs/upstream/UPSTREAM.md
-git commit -m "chore(upstream): bump plan SSoT pin to <새SHA> (요구사항 vX.Y)"
+# 4) 판단 결과를 문서에 반영하고 커밋
+git checkout -b chore/upstream-sync-<요약>
+git add upstream docs/upstream/UPSTREAM.lock   # 문서를 고쳤다면 함께
+git commit
 ```
 
-3번과 4번 사이에서 **Spring 쪽 영향 범위를 판단**하는 것이 이 절차의 목적이다.
-diff를 읽지 않고 핀만 올리는 것은 상대경로 참조와 다를 바 없다.
+**2번이 이 절차의 목적이다.** diff를 읽지 않고 핀만 올리는 것은 상대경로 참조와 다를
+바 없다 — 무엇이 바뀌었는지 모른 채 따라가게 된다. 그래서 스크립트는 `--pin`에 SHA를
+명시적으로 요구하고, 자동으로 최신까지 끌어올리지 않는다.
 
-## 6. 이 서브모듈을 다루는 규칙
+커밋 메시지에는 **diff에서 읽은 내용**을 남긴다. 그것이 나중에 "이 핀은 왜 여기
+있나"의 답이 된다.
+
+### 실제 사례 (2026-07-27)
+
+```text
+1단계 → 새 커밋 5개 중 Spring 영향 커밋 1개: 1c0671ae
+2단계 → 읽어보니 (a) 해당 절이 §9.5.4 → §9.5.5 로 이동
+                 (b) "채번을 바꾸면 행을 잠글 것"이라는 지침이 코드 주석으로 추가됨
+판단  → (a) spring-translation-map.md §6.5 의 인용이 stale → 교정
+        (b) Spring 의 의도적 차이가 원본 지침과 일치함을 확인 → 근거로 인용
+3~4  → 핀 이동과 문서 교정을 한 커밋으로
+```
+
+1단계만 돌리고 2단계를 건너뛰었다면 핀 숫자만 올라가고 인용은 stale인 채로 남았다.
+
+## 5. 이 서브모듈을 다루는 규칙
 
 - `upstream/` 안의 파일을 **절대 편집하지 않는다.** 읽기 전용이다.
 - 원본 기획에 문제를 발견하면 원본 저장소에서 고치고, 여기서는 핀만 올린다

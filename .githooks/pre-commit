@@ -98,7 +98,7 @@ elif [ -x "$REPO_ROOT/scripts/check-upstream.sh" ]; then
     echo "" >&2
     "$REPO_ROOT/scripts/check-upstream.sh" 2>&1 | sed 's/^/    /' >&2 || true
     echo "" >&2
-    echo "  절차: docs/upstream/UPSTREAM.md §5" >&2
+    echo "  절차: docs/upstream/UPSTREAM.md §4" >&2
     echo "  이번 커밋만 건너뛰기: SPRING_SKIP_UPSTREAM_CHECK=1 git commit ..." >&2
     echo "" >&2
     exit 1
